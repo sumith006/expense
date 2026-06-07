@@ -1,0 +1,95 @@
+========================================
+QUICK START COMMANDS
+========================================
+
+Copy and paste these commands in order to run your app:
+
+STEP 1 - Clean the project:
+flutter clean
+
+STEP 2 - Get dependencies:
+flutter pub get
+
+STEP 3 - Run the app:
+flutter run
+
+========================================
+SINGLE LINE (run all at once):
+========================================
+
+On Windows PowerShell:
+flutter clean; flutter pub get; flutter run
+
+On Windows Command Prompt:
+flutter clean & flutter pub get & flutter run
+
+========================================
+AFTER APP STARTS:
+========================================
+
+1. Navigate to Profile Screen
+   (Check your app's bottom navigation or menu)
+
+2. Test Date of Birth:
+   - Tap "Select Date of Birth"
+   - Calendar should open
+   - Select a date
+   - Date should show: "Date of Birth: DD/MM/YYYY"
+
+3. Test Currency:
+   - Open the Currency dropdown
+   - Select a different currency (EUR, GBP, etc.)
+   - Symbol should appear next to code
+   - Confirmation message appears
+
+4. Test Persistence:
+   - Close the app completely
+   - Reopen the app
+   - Go back to Profile
+   - Your date and currency should still be there!
+
+========================================
+BUILD FOR RELEASE:
+========================================
+
+For Android:
+flutter build apk
+
+For Android (split per ABI):
+flutter build apk --split-per-abi
+
+For iOS:
+flutter build ios
+
+========================================
+DEBUGGING:
+========================================
+
+If something doesn't work, run:
+flutter doctor
+
+This checks if everything is set up correctly.
+
+========================================
+LOGS:
+========================================
+
+To see detailed logs while running:
+flutter run -v
+
+========================================
+DEVICE/EMULATOR:
+========================================
+
+List available devices:
+flutter devices
+
+Run on specific device (replace with your device ID):
+flutter run -d <device-id>
+
+========================================
+ALL SET!
+========================================
+
+The Date Picker and Currency features are fully implemented.
+Just run the commands above and enjoy! 🚀

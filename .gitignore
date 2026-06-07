@@ -1,0 +1,61 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# Visual Studio Code related
+.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+
+# Web related
+.web-plugins-dependencies
+.web-plugins
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Windows related
+**/windows/flutter/ephemeral/
+**/windows/CMakeLists.txt.user
+
+# macOS/iOS related
+**/macos/Flutter/ephemeral/
+**/ios/Pods/
+**/macos/Pods/
+.symlinks/
+
+# Local configuration and environment secrets
+.env
+.env.*
+*.secret
