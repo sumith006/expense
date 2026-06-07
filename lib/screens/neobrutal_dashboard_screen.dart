@@ -257,7 +257,7 @@ class _NeoBrutalDashboardScreenState extends ConsumerState<NeoBrutalDashboardScr
       {'icon': Icons.add_rounded, 'label': 'Expense', 'color': NeoBrutalTheme.primary, 'route': AppRoutes.addExpense},
       {'icon': Icons.payments_rounded, 'label': 'Income', 'color': NeoBrutalTheme.secondary, 'route': AppRoutes.addIncome},
       {'icon': Icons.add_task_rounded, 'label': 'Task', 'color': NeoBrutalTheme.accent, 'route': AppRoutes.addTask},
-      {'icon': Icons.analytics_rounded, 'label': 'Reports', 'color': NeoBrutalTheme.success, 'route': AppRoutes.dashboard}, // Placeholder
+      {'icon': Icons.analytics_rounded, 'label': 'Reports', 'color': NeoBrutalTheme.success, 'route': AppRoutes.reports},
     ];
 
     return Padding(
