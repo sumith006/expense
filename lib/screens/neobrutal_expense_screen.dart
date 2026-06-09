@@ -7,6 +7,12 @@ import '../widgets/transaction_tile.dart';
 import '../models/expense.dart';
 import '../models/income.dart';
 import '../app/routes.dart';
+import '../utils/constants_shared.dart';
+import 'expense_screen/add_expense_screen.dart';
+import 'income_screen/add_income_screen.dart';
+import '../providers/currency_provider.dart';
+
+import '../services/image_service.dart';
 
 class NeoBrutalExpenseScreen extends ConsumerStatefulWidget {
   const NeoBrutalExpenseScreen({super.key});
@@ -37,6 +43,8 @@ class _NeoBrutalExpenseScreenState extends ConsumerState<NeoBrutalExpenseScreen>
     final expenseState = ref.watch(expenseProvider);
     final totalIncome = ref.watch(totalIncomeProvider);
     final totalExpense = ref.watch(totalExpenseProvider);
+    final currencyCode = ref.watch(currencyProvider);
+    final currencySymbol = getCurrencySymbol(currencyCode);
 
     return Scaffold(
       backgroundColor: NeoBrutalTheme.background,
@@ -68,15 +76,15 @@ class _NeoBrutalExpenseScreenState extends ConsumerState<NeoBrutalExpenseScreen>
       ),
       body: Column(
         children: [
-          _buildSummarySection(totalIncome, totalExpense),
+          _buildSummarySection(totalIncome, totalExpense, currencySymbol),
           _buildSearchBar(),
           Expanded(
             child: TabBarView(
               controller: _tabController,
               children: [
-                _buildTransactionList([...expenseState.expenses, ...expenseState.incomes]),
-                _buildTransactionList(expenseState.expenses),
-                _buildTransactionList(expenseState.incomes),
+                _buildTransactionList([...expenseState.expenses, ...expenseState.incomes], currencySymbol),
+                _buildTransactionList(expenseState.expenses, currencySymbol),
+                _buildTransactionList(expenseState.incomes, currencySymbol),
               ],
             ),
           ),
@@ -90,20 +98,20 @@ class _NeoBrutalExpenseScreenState extends ConsumerState<NeoBrutalExpenseScreen>
     );
   }
 
-  Widget _buildSummarySection(double income, double expense) {
+  Widget _buildSummarySection(double income, double expense, String currencySymbol) {
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Row(
         children: [
-          _buildSummaryCard('INCOME', income, NeoBrutalTheme.success),
+          _buildSummaryCard('INCOME', income, NeoBrutalTheme.success, currencySymbol),
           const SizedBox(width: 16),
-          _buildSummaryCard('SPENT', expense, NeoBrutalTheme.error),
+          _buildSummaryCard('SPENT', expense, NeoBrutalTheme.error, currencySymbol),
         ],
       ),
     );
   }
 
-  Widget _buildSummaryCard(String label, double amount, Color color) {
+  Widget _buildSummaryCard(String label, double amount, Color color, String currencySymbol) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(16),
@@ -117,7 +125,7 @@ class _NeoBrutalExpenseScreenState extends ConsumerState<NeoBrutalExpenseScreen>
             Text(label, style: TextStyle(color: color.withValues(alpha: 0.6), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
             const SizedBox(height: 4),
             Text(
-              '\$${amount.toStringAsFixed(0)}',
+              '$currencySymbol${amount.toStringAsFixed(0)}',
               style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900),
             ),
           ],
@@ -145,7 +153,7 @@ class _NeoBrutalExpenseScreenState extends ConsumerState<NeoBrutalExpenseScreen>
     );
   }
 
-  Widget _buildTransactionList(List<dynamic> list) {
+  Widget _buildTransactionList(List<dynamic> list, String currencySymbol) {
     final filtered = list.where((item) {
       final query = _searchQuery.toLowerCase();
       final title = item is Expense ? item.description : (item as Income).source;
@@ -165,6 +173,7 @@ class _NeoBrutalExpenseScreenState extends ConsumerState<NeoBrutalExpenseScreen>
         itemBuilder: (context, index) {
           final tx = filtered[index];
           final isExpense = tx is Expense;
+          final id = isExpense ? tx.id : (tx as Income).id;
           
           return AnimationConfiguration.staggeredList(
             position: index,
@@ -172,13 +181,39 @@ class _NeoBrutalExpenseScreenState extends ConsumerState<NeoBrutalExpenseScreen>
             child: SlideAnimation(
               verticalOffset: 50.0,
               child: FadeInAnimation(
-                child: TransactionTile(
-                  title: isExpense ? tx.description : (tx as Income).source,
-                  subtitle: tx.categoryName,
-                  amount: tx.amount,
-                  icon: isExpense ? Icons.shopping_bag_rounded : Icons.payments_rounded,
-                  isExpense: isExpense,
-                  onTap: () {},
+                child: Dismissible(
+                  key: Key(id),
+                  direction: DismissDirection.endToStart,
+                  confirmDismiss: (direction) async {
+                    return await _confirmDeletion(context, isExpense ? (tx as Expense).description : (tx as Income).source);
+                  },
+                  onDismissed: (direction) {
+                    _deleteTransactionWithUndo(tx, isExpense);
+                  },
+                  background: Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: NeoBrutalTheme.error,
+                      borderRadius: NeoBrutalTheme.radiusMedium,
+                    ),
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.only(right: 20),
+                    child: const Icon(Icons.delete_forever_rounded, color: Colors.white, size: 28),
+                  ),
+                  child: TransactionTile(
+                    title: isExpense ? (tx as Expense).description : (tx as Income).source,
+                    subtitle: isExpense ? (tx as Expense).categoryName : (tx as Income).categoryName,
+                    amount: isExpense ? (tx as Expense).amount : (tx as Income).amount,
+                    icon: isExpense ? Icons.shopping_bag_rounded : Icons.payments_rounded,
+                    isExpense: isExpense,
+                    onTap: () => _editTransaction(tx, isExpense),
+                    onLongPress: () => _editTransaction(tx, isExpense),
+                    currencySymbol: currencySymbol,
+                    receiptImagePath: isExpense ? (tx as Expense).receiptImagePath : null,
+                    onReceiptTap: isExpense && (tx as Expense).receiptImagePath != null 
+                        ? () => ImageService.showReceiptPreview(context, (tx as Expense).receiptImagePath!) 
+                        : null,
+                  ),
                 ),
               ),
             ),
@@ -186,6 +221,80 @@ class _NeoBrutalExpenseScreenState extends ConsumerState<NeoBrutalExpenseScreen>
         },
       ),
     );
+  }
+
+  Future<bool?> _confirmDeletion(BuildContext context, String title) async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: NeoBrutalTheme.surface,
+        shape: RoundedRectangleBorder(borderRadius: NeoBrutalTheme.radiusLarge),
+        title: const Text('DELETE RECORD?', style: TextStyle(color: Colors.white, letterSpacing: 1.5, fontWeight: FontWeight.bold)),
+        content: Text('Are you sure you want to delete "$title"?', style: const TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('CANCEL', style: TextStyle(color: Colors.white30)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: NeoBrutalTheme.error),
+            child: const Text('DELETE'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _deleteTransactionWithUndo(dynamic tx, bool isExpense) {
+    if (isExpense) {
+      final expense = tx as Expense;
+      ref.read(expenseProvider.notifier).deleteExpense(expense.id);
+      _showUndoSnackBar('Expense deleted', () {
+        ref.read(expenseProvider.notifier).addExpense(expense);
+      });
+    } else {
+      final income = tx as Income;
+      ref.read(expenseProvider.notifier).deleteIncome(income.id);
+      _showUndoSnackBar('Income deleted', () {
+        ref.read(expenseProvider.notifier).addIncome(income);
+      });
+    }
+  }
+
+  void _showUndoSnackBar(String message, VoidCallback onUndo) {
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: const TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: NeoBrutalTheme.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: NeoBrutalTheme.radiusMedium),
+        action: SnackBarAction(
+          label: 'UNDO',
+          textColor: Colors.white,
+          onPressed: onUndo,
+        ),
+      ),
+    );
+  }
+
+  void _editTransaction(dynamic tx, bool isExpense) {
+    if (isExpense) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => AddExpenseScreen(existingExpense: tx as Expense),
+        ),
+      );
+    } else {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => AddIncomeScreen(existingIncome: tx as Income),
+        ),
+      );
+    }
   }
 
   void _showAddSelector(BuildContext context) {

@@ -10,6 +10,8 @@ import '../models/task.dart';
 import '../theme/neobrutal_theme.dart';
 import '../providers/settings_provider.dart';
 import '../utils/currency_formatter.dart';
+import '../database/boxes.dart';
+import '../providers/currency_provider.dart';
 
 class ReportsScreen extends ConsumerStatefulWidget {
   const ReportsScreen({super.key});
@@ -48,7 +50,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    _loadData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadData();
+    });
   }
 
   @override
@@ -59,44 +63,52 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
 
   // ─── Data loading ──────────────────────────────────────────────────────────
   Future<void> _loadData() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     try {
-      final expenseBox = Hive.isBoxOpen('expenses')
-          ? Hive.box<Expense>('expenses')
-          : await Hive.openBox<Expense>('expenses');
-      final incomeBox = Hive.isBoxOpen('incomes')
-          ? Hive.box<Income>('incomes')
-          : await Hive.openBox<Income>('incomes');
-      final taskBox = Hive.isBoxOpen('tasks')
-          ? Hive.box<Task>('tasks')
-          : await Hive.openBox<Task>('tasks');
+      final expenseBox = Hive.isBoxOpen(Boxes.expenses)
+          ? Hive.box<Expense>(Boxes.expenses)
+          : await Hive.openBox<Expense>(Boxes.expenses);
+      final incomeBox = Hive.isBoxOpen(Boxes.incomes)
+          ? Hive.box<Income>(Boxes.incomes)
+          : await Hive.openBox<Income>(Boxes.incomes);
+      final taskBox = Hive.isBoxOpen(Boxes.tasks)
+          ? Hive.box<Task>(Boxes.tasks)
+          : await Hive.openBox<Task>(Boxes.tasks);
 
-      final start = _dateRange.start.subtract(const Duration(days: 1));
-      final end = _dateRange.end.add(const Duration(days: 1));
+      // Set time to beginning of start day and end of end day for inclusive filtering
+      final start = DateTime(_dateRange.start.year, _dateRange.start.month, _dateRange.start.day);
+      final end = DateTime(_dateRange.end.year, _dateRange.end.month, _dateRange.end.day, 23, 59, 59);
 
+      final loadedExpenses = expenseBox.values
+          .where((e) => e.date.isAfter(start.subtract(const Duration(seconds: 1))) && 
+                        e.date.isBefore(end.add(const Duration(seconds: 1))))
+          .toList();
+      final loadedIncomes = incomeBox.values
+          .where((i) => i.date.isAfter(start.subtract(const Duration(seconds: 1))) && 
+                        i.date.isBefore(end.add(const Duration(seconds: 1))))
+          .toList();
+      final loadedTasks = taskBox.values
+          .where((t) => t.createdAt.isAfter(start.subtract(const Duration(seconds: 1))) && 
+                        t.createdAt.isBefore(end.add(const Duration(seconds: 1))))
+          .toList();
+
+      if (!mounted) return;
       setState(() {
-        _expenses = expenseBox.values
-            .where((e) => e.date.isAfter(start) && e.date.isBefore(end))
-            .toList();
-        _incomes = incomeBox.values
-            .where((i) => i.date.isAfter(start) && i.date.isBefore(end))
-            .toList();
-        _tasks = taskBox.values
-            .where((t) =>
-                t.createdAt.isAfter(start) && t.createdAt.isBefore(end))
-            .toList();
+        _expenses = loadedExpenses;
+        _incomes = loadedIncomes;
+        _tasks = loadedTasks;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading data: $e'),
-            backgroundColor: NeoBrutalTheme.error,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error loading data: $e'),
+          backgroundColor: NeoBrutalTheme.error,
+        ),
+      );
     }
   }
 
@@ -171,7 +183,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
   // ─── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final currencySymbol = ref.watch(settingsProvider).currencySymbol;
+    final currencyCode = ref.watch(currencyProvider);
+    final currencySymbol = getCurrencySymbol(currencyCode);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A0F),
@@ -382,66 +395,94 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
     final slices = sorted.take(8).toList();
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: const Color(0xFF16161D),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white12),
       ),
       child: Column(
         children: [
-          SizedBox(
-            height: 220,
-            child: PieChart(
-              PieChartData(
-                sections: slices.asMap().entries.map((entry) {
-                  final idx = entry.key;
-                  final cat = entry.value;
-                  final pct = _totalExpenses > 0
-                      ? (cat.value / _totalExpenses) * 100
-                      : 0.0;
-                  return PieChartSectionData(
-                    value: cat.value,
-                    title: '${pct.toStringAsFixed(0)}%',
-                    color: _chartColors[idx % _chartColors.length],
-                    radius: 85,
-                    titleStyle: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  );
-                }).toList(),
-                sectionsSpace: 3,
-                centerSpaceRadius: 45,
+          Center(
+            child: SizedBox(
+              height: 200,
+              width: 200,
+              child: PieChart(
+                PieChartData(
+                  sections: slices.asMap().entries.map((entry) {
+                    final idx = entry.key;
+                    final cat = entry.value;
+                    final pct = _totalExpenses > 0
+                        ? (cat.value / _totalExpenses) * 100
+                        : 0.0;
+                    return PieChartSectionData(
+                      value: cat.value,
+                      title: '${pct.toStringAsFixed(0)}%',
+                      color: _chartColors[idx % _chartColors.length],
+                      radius: 80,
+                      titleStyle: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    );
+                  }).toList(),
+                  sectionsSpace: 2,
+                  centerSpaceRadius: 40,
+                ),
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          // Legend
-          Wrap(
-            spacing: 12,
-            runSpacing: 8,
+          const SizedBox(height: 32),
+          // Legend below chart
+          Column(
             children: slices.asMap().entries.map((entry) {
               final idx = entry.key;
               final cat = entry.value;
-              return Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: _chartColors[idx % _chartColors.length],
-                      shape: BoxShape.circle,
+              final pct = _totalExpenses > 0
+                  ? (cat.value / _totalExpenses) * 100
+                  : 0.0;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: _chartColors[idx % _chartColors.length],
+                        shape: BoxShape.circle,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${cat.key} · ${CurrencyFormatter.format(cat.value, currencySymbol)}',
-                    style: const TextStyle(color: Colors.white70, fontSize: 11),
-                  ),
-                ],
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 3,
+                      child: Text(
+                        cat.key,
+                        style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        CurrencyFormatter.format(cat.value, currencySymbol),
+                        textAlign: TextAlign.end,
+                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      width: 40,
+                      child: Text(
+                        '${pct.toStringAsFixed(0)}%',
+                        textAlign: TextAlign.end,
+                        style: const TextStyle(color: Colors.grey, fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
               );
             }).toList(),
           ),
@@ -543,9 +584,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
     return Row(
       children: [
         _buildStatChip('Total', _totalTasksCount, const Color(0xFF6366F1)),
-        const SizedBox(width: 10),
+        const SizedBox(width: 12),
         _buildStatChip('Done', _completedTasksCount, const Color(0xFF10B981)),
-        const SizedBox(width: 10),
+        const SizedBox(width: 12),
         _buildStatChip('Pending', pending, const Color(0xFFF59E0B)),
       ],
     );
@@ -582,49 +623,94 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
   Widget _buildTaskCompletionChart() {
     final pct = _taskCompletionRate;
     final color = pct >= 0.7 ? const Color(0xFF10B981) : const Color(0xFFF59E0B);
+    final pending = _totalTasksCount - _completedTasksCount;
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: const Color(0xFF16161D),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white12),
       ),
-      child: Center(
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            SizedBox(
-              width: 160,
-              height: 160,
-              child: CircularProgressIndicator(
-                value: pct,
-                strokeWidth: 14,
-                backgroundColor: Colors.white12,
-                valueColor: AlwaysStoppedAnimation<Color>(color),
-                strokeCap: StrokeCap.round,
+      child: Column(
+        children: [
+          Center(
+            child: SizedBox(
+              width: 150,
+              height: 150,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox(
+                    width: 150,
+                    height: 150,
+                    child: CircularProgressIndicator(
+                      value: pct,
+                      strokeWidth: 14,
+                      backgroundColor: Colors.white12,
+                      valueColor: AlwaysStoppedAnimation<Color>(color),
+                      strokeCap: StrokeCap.round,
+                    ),
+                  ),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '${(pct * 100).toStringAsFixed(0)}%',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const Text(
+                        'Complete',
+                        style: TextStyle(color: Colors.grey, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '${(pct * 100).toStringAsFixed(0)}%',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 36,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const Text(
-                  'Completed',
-                  style: TextStyle(color: Colors.grey, fontSize: 13),
-                ),
-              ],
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 32),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildSimpleStat('Total', _totalTasksCount, const Color(0xFF6366F1)),
+              _buildStatDivider(),
+              _buildSimpleStat('Done', _completedTasksCount, const Color(0xFF10B981)),
+              _buildStatDivider(),
+              _buildSimpleStat('Pending', pending, const Color(0xFFF59E0B)),
+            ],
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _buildSimpleStat(String label, int value, Color color) {
+    return Column(
+      children: [
+        Text(
+          '$value',
+          style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.w500),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatDivider() {
+    return Container(
+      height: 24,
+      width: 1,
+      color: Colors.white10,
     );
   }
 
@@ -633,18 +719,19 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
     final total = _totalTasksCount;
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: const Color(0xFF16161D),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white12),
       ),
       child: Column(
         children: [
           _buildPriorityBar('High', priorities['High']!, total, const Color(0xFFEF4444)),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           _buildPriorityBar('Medium', priorities['Medium']!, total, const Color(0xFFF59E0B)),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           _buildPriorityBar('Low', priorities['Low']!, total, const Color(0xFF10B981)),
         ],
       ),
@@ -665,22 +752,31 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
             ),
             const SizedBox(width: 8),
             Text(label,
-                style: const TextStyle(color: Colors.white, fontSize: 14)),
+                style: const TextStyle(color: Colors.white70, fontSize: 13)),
             const Spacer(),
             Text(
               '$count task${count != 1 ? 's' : ''}',
               style: const TextStyle(
-                  color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                  color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 35,
+              child: Text(
+                '${(pct * 100).toStringAsFixed(0)}%',
+                textAlign: TextAlign.end,
+                style: const TextStyle(color: Colors.grey, fontSize: 12),
+              ),
             ),
           ],
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
         ClipRRect(
           borderRadius: BorderRadius.circular(4),
           child: LinearProgressIndicator(
             value: pct,
-            minHeight: 8,
-            backgroundColor: Colors.white12,
+            minHeight: 6,
+            backgroundColor: Colors.white.withOpacity(0.05),
             valueColor: AlwaysStoppedAnimation<Color>(color),
           ),
         ),

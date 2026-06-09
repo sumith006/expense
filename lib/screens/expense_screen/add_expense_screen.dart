@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import 'package:intl/intl.dart';
+import 'dart:io';
 import '../../models/expense.dart';
 import '../../models/category.dart';
 import '../../models/task.dart';
@@ -11,6 +12,7 @@ import '../../providers/expense_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/recurring_provider.dart';
+import '../../services/image_service.dart';
 
 import '../../utils/constants_shared.dart';
 import '../../utils/helpers.dart';
@@ -21,8 +23,11 @@ import '../../widgets/date_picker_trigger.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/secondary_button.dart';
 
+import '../../providers/currency_provider.dart';
+
 class AddExpenseScreen extends ConsumerStatefulWidget {
-  const AddExpenseScreen({super.key});
+  final Expense? existingExpense;
+  const AddExpenseScreen({super.key, this.existingExpense});
 
   @override
   ConsumerState<AddExpenseScreen> createState() => _AddExpenseScreenState();
@@ -43,7 +48,25 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   bool _isRecurring = false;
   String _recurringFrequency = 'monthly';
 
-  final ImagePicker _imagePicker = ImagePicker();
+  bool _isPickingImage = false;
+
+  bool get isEditing => widget.existingExpense != null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (isEditing) {
+      final e = widget.existingExpense!;
+      _amountController.text = e.amount.toStringAsFixed(2);
+      _descriptionController.text = e.description;
+      _notesController.text = e.notes;
+      _selectedCategoryId = e.categoryId;
+      _selectedDate = e.date;
+      _receiptImagePath = e.receiptImagePath;
+      _linkedTaskId = e.linkedTaskId;
+      _isRecurring = e.isRecurring;
+    }
+  }
 
   @override
   void dispose() {
@@ -70,69 +93,83 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     }
   }
 
-  Future<void> _pickReceipt(ImageSource source) async {
-    try {
-      final XFile? file = await _imagePicker.pickImage(source: source);
-      if (file != null) {
-        setState(() {
-          _receiptImagePath = file.path;
-        });
+  Future<void> _handleReceiptAction() async {
+    if (_receiptImagePath == null) {
+      await _pickReceipt();
+    } else {
+      final action = await ImageService.showReceiptPreview(context, _receiptImagePath!);
+      if (action == 'change') {
+        await _pickReceipt();
+      } else if (action == 'remove') {
+        _removeReceipt();
       }
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to pick receipt: $e')));
     }
   }
 
-  void _showImagePickerSheet() {
-    final theme = Theme.of(context);
-    showModalBottomSheet(
+  Future<void> _pickReceipt() async {
+    setState(() => _isPickingImage = true);
+    
+    final source = await showModalBottomSheet<ImageSource>(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppConstants.radiusLarge),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Take Photo'),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Choose from Gallery'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+          ],
         ),
       ),
-      builder: (context) {
-        return SafeArea(
-          child: Wrap(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(AppConstants.spacingL),
-                child: Text(
-                  'Attach Receipt',
-                  style: theme.textTheme.titleMedium,
-                ),
-              ),
-              Divider(height: 1, color: theme.colorScheme.outlineVariant),
-              ListTile(
-                leading: Icon(
-                  Icons.camera_alt_outlined,
-                  color: theme.colorScheme.primary,
-                ),
-                title: const Text('Capture with Camera'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _pickReceipt(ImageSource.camera);
-                },
-              ),
-              ListTile(
-                leading: Icon(
-                  Icons.photo_library_outlined,
-                  color: theme.colorScheme.primary,
-                ),
-                title: const Text('Choose from Gallery'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _pickReceipt(ImageSource.gallery);
-                },
-              ),
-              const SizedBox(height: AppConstants.spacingL),
-            ],
+    );
+    
+    if (source != null) {
+      final imagePath = source == ImageSource.camera
+          ? await ImageService.pickFromCamera()
+          : await ImageService.pickAndSaveReceipt();
+          
+      if (imagePath != null && mounted) {
+        // If there was an old receipt (and not the same as existing one if editing), delete it
+        if (_receiptImagePath != null && _receiptImagePath != widget.existingExpense?.receiptImagePath) {
+          await ImageService.deleteReceipt(_receiptImagePath);
+        }
+        setState(() => _receiptImagePath = imagePath);
+      }
+    }
+    
+    setState(() => _isPickingImage = false);
+  }
+
+  void _removeReceipt() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove Receipt'),
+        content: const Text('Are you sure you want to remove this receipt image?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('CANCEL'),
           ),
-        );
-      },
+          TextButton(
+            onPressed: () async {
+              if (_receiptImagePath != null && _receiptImagePath != widget.existingExpense?.receiptImagePath) {
+                await ImageService.deleteReceipt(_receiptImagePath);
+              }
+              setState(() => _receiptImagePath = null);
+              Navigator.pop(context);
+            },
+            child: const Text('REMOVE', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -159,7 +196,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       (c) => c.id == _selectedCategoryId,
     );
 
-    final String expenseId = const Uuid().v4();
+    final String expenseId = isEditing ? widget.existingExpense!.id : const Uuid().v4();
+
+    // If we removed or changed the original receipt image, delete the file if it's not being used elsewhere
+    if (isEditing && widget.existingExpense!.receiptImagePath != null && widget.existingExpense!.receiptImagePath != _receiptImagePath) {
+       // Only delete if it's definitely not the one we are currently keeping
+       await ImageService.deleteReceipt(widget.existingExpense!.receiptImagePath);
+    }
 
     // 1. Create and Save Expense Object
     final expense = Expense(
@@ -173,21 +216,26 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       receiptImagePath: _receiptImagePath,
       linkedTaskId: _linkedTaskId,
       isRecurring: _isRecurring,
-      createdAt: DateTime.now(),
+      recurringId: isEditing ? widget.existingExpense!.recurringId : null,
+      createdAt: isEditing ? widget.existingExpense!.createdAt : DateTime.now(),
       updatedAt: DateTime.now(),
     );
 
-    await ref.read(expenseProvider.notifier).addExpense(expense);
+    if (isEditing) {
+      await ref.read(expenseProvider.notifier).updateExpense(expense);
+    } else {
+      await ref.read(expenseProvider.notifier).addExpense(expense);
+    }
 
     // 2. Task Linkage Integration
-    if (_linkedTaskId != null) {
+    if (_linkedTaskId != null && (!isEditing || widget.existingExpense!.linkedTaskId != _linkedTaskId)) {
       await ref
           .read(taskProvider.notifier)
           .linkExpenseToTask(_linkedTaskId!, expenseId);
     }
 
     // 3. Setup Recurring transaction rule
-    if (_isRecurring) {
+    if (_isRecurring && !isEditing) {
       final recurringRule = RecurringTransaction(
         id: const Uuid().v4(),
         title: expense.description.isNotEmpty
@@ -229,8 +277,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Expense logged successfully'),
+        SnackBar(
+          content: Text(isEditing ? 'Expense updated successfully' : 'Expense logged successfully'),
           backgroundColor: AppConstants.secondaryColor,
         ),
       );
@@ -243,6 +291,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     final theme = Theme.of(context);
     final expenseState = ref.watch(expenseProvider);
     final tasks = ref.watch(taskProvider);
+    final currencyCode = ref.watch(currencyProvider);
+    final currencySymbol = getCurrencySymbol(currencyCode);
 
     final expenseCategories = expenseState.categories
         .where((c) => c.type == CategoryType.expense)
@@ -252,7 +302,39 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
         .toList();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Add Expense')),
+      appBar: AppBar(
+        title: Text(isEditing ? 'Edit Expense' : 'Add Expense'),
+        actions: [
+          if (isEditing)
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: AppConstants.expenseColor),
+              onPressed: () async {
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Delete Expense'),
+                    content: const Text('Delete this expense permanently?'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Delete', style: TextStyle(color: AppConstants.expenseColor)),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirm == true) {
+                  // Delete receipt image file if it exists
+                  if (widget.existingExpense!.receiptImagePath != null) {
+                    await ImageService.deleteReceipt(widget.existingExpense!.receiptImagePath);
+                  }
+                  await ref.read(expenseProvider.notifier).deleteExpense(widget.existingExpense!.id);
+                  if (mounted) Navigator.pop(context);
+                }
+              },
+            ),
+        ],
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppConstants.paddingLarge),
         child: Form(
@@ -291,7 +373,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                           hintStyle: theme.textTheme.displayMedium?.copyWith(
                             color: AppConstants.expenseColor.withValues(alpha: 0.5),
                           ),
-                          prefixText: '\$ ',
+                          prefixText: '$currencySymbol ',
                           prefixStyle: theme.textTheme.displayMedium?.copyWith(
                             color: AppConstants.expenseColor,
                             fontWeight: FontWeight.bold,
@@ -397,14 +479,31 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (_receiptImagePath != null) ...[
-                      Container(
-                        height: 160,
-                        color: theme.colorScheme.surfaceContainerHighest,
-                        child: Center(
-                          child: Icon(
-                            Icons.receipt,
-                            size: 48,
-                            color: theme.colorScheme.onSurfaceVariant,
+                      GestureDetector(
+                        onTap: _handleReceiptAction,
+                        child: Container(
+                          height: 160,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                             color: theme.colorScheme.surfaceContainerHighest,
+                             borderRadius: BorderRadius.circular(AppConstants.radiusSmall),
+                             image: DecorationImage(
+                               image: FileImage(File(_receiptImagePath!)),
+                               fit: BoxFit.cover,
+                             ),
+                          ),
+                          child: Container(
+                             decoration: BoxDecoration(
+                               color: Colors.black.withOpacity(0.3),
+                               borderRadius: BorderRadius.circular(AppConstants.radiusSmall),
+                             ),
+                             child: const Center(
+                               child: Icon(
+                                 Icons.zoom_in_rounded,
+                                 size: 32,
+                                 color: Colors.white,
+                               ),
+                             ),
                           ),
                         ),
                       ),
@@ -417,9 +516,21 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                             ? 'Attach Receipt Image'
                             : 'Change Receipt Image',
                         icon: Icons.add_a_photo_outlined,
-                        onPressed: _showImagePickerSheet,
+                        onPressed: _isPickingImage ? () {} : () => _pickReceipt(),
                       ),
                     ),
+                    if (_receiptImagePath != null) ...[
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: TextButton.icon(
+                          onPressed: _removeReceipt,
+                          icon: const Icon(Icons.delete_outline, size: 18),
+                          label: const Text('Remove Receipt'),
+                          style: TextButton.styleFrom(foregroundColor: Colors.red),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -518,7 +629,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               const SizedBox(height: AppConstants.spacingXxl),
 
               // Save Button
-              PrimaryButton(text: 'Save Expense', onPressed: _saveExpense),
+              PrimaryButton(text: isEditing ? 'Update Expense' : 'Save Expense', onPressed: _saveExpense),
               const SizedBox(height: AppConstants.spacingXl),
             ],
           ),

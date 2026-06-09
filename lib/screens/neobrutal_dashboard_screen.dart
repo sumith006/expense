@@ -15,6 +15,10 @@ import '../models/task.dart';
 import '../models/expense.dart';
 import '../models/income.dart';
 import '../app/routes.dart';
+import '../providers/currency_provider.dart';
+import '../providers/user_provider.dart';
+
+import '../services/image_service.dart';
 
 class NeoBrutalDashboardScreen extends ConsumerStatefulWidget {
   const NeoBrutalDashboardScreen({super.key});
@@ -54,6 +58,9 @@ class _NeoBrutalDashboardScreenState extends ConsumerState<NeoBrutalDashboardScr
     final expenseState = ref.watch(expenseProvider);
     final taskList = ref.watch(taskProvider);
     final settings = ref.watch(settingsProvider);
+    final userName = ref.watch(userProvider);
+    final currencyCode = ref.watch(currencyProvider);
+    final currencySymbol = getCurrencySymbol(currencyCode);
     
     final totalIncome = ref.watch(totalIncomeProvider);
     final totalExpense = ref.watch(totalExpenseProvider);
@@ -70,7 +77,7 @@ class _NeoBrutalDashboardScreenState extends ConsumerState<NeoBrutalDashboardScr
       body: SafeArea(
         child: Column(
           children: [
-            _buildHeader(settings.profileName ?? 'User'),
+            _buildHeader(userName.isNotEmpty ? userName : 'User'),
             Expanded(
               child: AnimationLimiter(
                 child: SingleChildScrollView(
@@ -84,13 +91,13 @@ class _NeoBrutalDashboardScreenState extends ConsumerState<NeoBrutalDashboardScr
                         child: FadeInAnimation(child: widget),
                       ),
                       children: [
-                        _buildBalanceCard(netBalance, totalIncome, totalExpense),
+                        _buildBalanceCard(netBalance, totalIncome, totalExpense, currencySymbol),
                         const SizedBox(height: 32),
                         _buildQuickActions(),
                         const SizedBox(height: 32),
                         _buildTasksSection(recentTasks),
                         const SizedBox(height: 32),
-                        _buildTransactionsSection(recentTransactions),
+                        _buildTransactionsSection(recentTransactions, currencySymbol),
                         const SizedBox(height: 100),
                       ],
                     ),
@@ -162,7 +169,7 @@ class _NeoBrutalDashboardScreenState extends ConsumerState<NeoBrutalDashboardScr
     );
   }
 
-  Widget _buildBalanceCard(double balance, double income, double expense) {
+  Widget _buildBalanceCard(double balance, double income, double expense, String currencySymbol) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: NeonCard(
@@ -190,7 +197,7 @@ class _NeoBrutalDashboardScreenState extends ConsumerState<NeoBrutalDashboardScr
             ScaleTransition(
               scale: _balanceAnimation,
               child: Text(
-                '\$${balance.toStringAsFixed(2)}',
+                '$currencySymbol${balance.toStringAsFixed(2)}',
                 style: NeoBrutalTheme.textTheme.displayLarge?.copyWith(
                   fontSize: 48,
                   fontWeight: FontWeight.w900,
@@ -204,9 +211,9 @@ class _NeoBrutalDashboardScreenState extends ConsumerState<NeoBrutalDashboardScr
             const SizedBox(height: 32),
             Row(
               children: [
-                _buildStatItem('INCOME', '\$${income.toStringAsFixed(0)}', NeoBrutalTheme.success, Icons.arrow_upward_rounded),
+                _buildStatItem('INCOME', '$currencySymbol${income.toStringAsFixed(0)}', NeoBrutalTheme.success, Icons.arrow_upward_rounded),
                 const SizedBox(width: 16),
-                _buildStatItem('EXPENSES', '\$${expense.toStringAsFixed(0)}', NeoBrutalTheme.error, Icons.arrow_downward_rounded),
+                _buildStatItem('EXPENSES', '$currencySymbol${expense.toStringAsFixed(0)}', NeoBrutalTheme.error, Icons.arrow_downward_rounded),
               ],
             ),
           ],
@@ -240,7 +247,7 @@ class _NeoBrutalDashboardScreenState extends ConsumerState<NeoBrutalDashboardScr
             const SizedBox(height: 8),
             Text(
               amount,
-              style: TextStyle(
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
@@ -332,7 +339,7 @@ class _NeoBrutalDashboardScreenState extends ConsumerState<NeoBrutalDashboardScr
     );
   }
 
-  Widget _buildTransactionsSection(List<dynamic> txs) {
+  Widget _buildTransactionsSection(List<dynamic> txs, String currencySymbol) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
@@ -368,6 +375,9 @@ class _NeoBrutalDashboardScreenState extends ConsumerState<NeoBrutalDashboardScr
                   amount: tx.amount,
                   icon: Icons.shopping_cart_rounded,
                   isExpense: true,
+                  currencySymbol: currencySymbol,
+                  receiptImagePath: tx.receiptImagePath,
+                  onReceiptTap: tx.receiptImagePath != null ? () => ImageService.showReceiptPreview(context, tx.receiptImagePath!) : null,
                 );
               } else if (tx is Income) {
                 return TransactionTile(
@@ -376,6 +386,7 @@ class _NeoBrutalDashboardScreenState extends ConsumerState<NeoBrutalDashboardScr
                   amount: tx.amount,
                   icon: Icons.account_balance_wallet_rounded,
                   isExpense: false,
+                  currencySymbol: currencySymbol,
                 );
               }
               return const SizedBox.shrink();

@@ -6,98 +6,104 @@ import '../providers/settings_provider.dart';
 import '../providers/profile_provider.dart';
 import '../widgets/animated_bottom_nav.dart';
 import '../widgets/profile_avatar.dart';
-import '../services/backup_service.dart';
 import '../services/profile_service.dart';
+import '../providers/currency_provider.dart';
+import '../providers/user_provider.dart';
 
 class NeoBrutalProfileScreen extends ConsumerWidget {
   const NeoBrutalProfileScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final settings = ref.watch(settingsProvider);
-    final profileService = ref.watch(profileServiceProvider);
+    try {
+      final settings = ref.watch(settingsProvider);
+      final userName = ref.watch(userProvider);
+      final profileService = ref.watch(profileServiceProvider);
+      final currencyCode = ref.watch(currencyProvider);
 
-    return Scaffold(
-      backgroundColor: NeoBrutalTheme.background,
-      appBar: AppBar(
-        title: Text(
-          'PROFILE',
-          style: NeoBrutalTheme.textTheme.headlineMedium?.copyWith(
-            letterSpacing: 2,
-            fontWeight: FontWeight.w900,
+      return Scaffold(
+        backgroundColor: NeoBrutalTheme.background,
+        appBar: AppBar(
+          automaticallyImplyLeading: false, // Prevent back button if unwanted
+          title: Text(
+            'PROFILE',
+            style: NeoBrutalTheme.textTheme.headlineMedium?.copyWith(
+              letterSpacing: 2,
+              fontWeight: FontWeight.w900,
+            ),
           ),
         ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            _buildProfilePhotoSection(context, ref, settings.profileName ?? 'User', profileService),
-            const SizedBox(height: 24),
-            _buildPersonalDetailsSection(context, ref, profileService),
-            const SizedBox(height: 24),
-            _buildNotificationSettingsSection(context, ref, profileService),
-            const SizedBox(height: 24),
-            _buildSection(context, 'PREFERENCES', [
-              _buildSettingTile(
-                'THEME MODE',
-                settings.themeMode.name.toUpperCase(),
-                Icons.palette_rounded,
-                NeoBrutalTheme.primary,
-                onTap: () => _showThemeDialog(context, ref, settings.themeMode),
-              ),
-              _buildSettingTile(
-                'CURRENCY',
-                settings.currencySymbol,
-                Icons.monetization_on_rounded,
-                NeoBrutalTheme.secondary,
-                onTap: () => _showCurrencyDialog(context, ref, settings.currencySymbol),
-              ),
-            ]),
-            const SizedBox(height: 24),
-            _buildSection(context, 'SECURITY', [
-              _buildSettingTile(
-                'PIN LOCK',
-                settings.isPinEnabled ? 'ENABLED' : 'DISABLED',
-                Icons.lock_rounded,
-                NeoBrutalTheme.accent,
-                onTap: () => _showPinDialog(context, ref, settings.isPinEnabled),
-              ),
-              _buildSettingTile(
-                'BIOMETRICS',
-                settings.isBiometricEnabled ? 'ENABLED' : 'DISABLED',
-                Icons.fingerprint_rounded,
-                NeoBrutalTheme.success,
-                onTap: () => _showBiometricDialog(context, ref, settings.isBiometricEnabled),
-              ),
-            ]),
-            const SizedBox(height: 24),
-            _buildSection(context, 'DATA', [
-              _buildSettingTile(
-                'BACKUP',
-                'EXPORT DATA',
-                Icons.cloud_upload_rounded,
-                NeoBrutalTheme.secondary,
-                onTap: () => _exportBackup(context),
-              ),
-              _buildSettingTile(
-                'WIPE ALL',
-                'DANGEROUS',
-                Icons.delete_forever_rounded,
-                NeoBrutalTheme.error,
-                onTap: () => _showClearDataDialog(context, ref),
-              ),
-            ]),
-            const SizedBox(height: 100),
-          ],
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              _buildProfilePhotoSection(context, ref, userName.isNotEmpty ? userName : 'User', profileService),
+              const SizedBox(height: 24),
+              _buildPersonalDetailsSection(context, ref, profileService, userName),
+              const SizedBox(height: 24),
+              _buildNotificationSettingsSection(context, ref, profileService),
+              const SizedBox(height: 24),
+              _buildSection(context, 'PREFERENCES', [
+                _buildSettingTile(
+                  'THEME MODE',
+                  settings.themeMode.name.toUpperCase(),
+                  Icons.palette_rounded,
+                  NeoBrutalTheme.primary,
+                  onTap: () => _showThemeDialog(context, ref, settings.themeMode),
+                ),
+                _buildSettingTile(
+                  'CURRENCY',
+                  currencyCode,
+                  Icons.monetization_on_rounded,
+                  NeoBrutalTheme.secondary,
+                  onTap: () => _showCurrencyDialog(context, ref, currencyCode),
+                ),
+              ]),
+              const SizedBox(height: 24),
+              _buildSection(context, 'SECURITY', [
+                _buildSettingTile(
+                  'PIN LOCK',
+                  settings.isPinEnabled ? 'ENABLED' : 'DISABLED',
+                  Icons.lock_rounded,
+                  NeoBrutalTheme.accent,
+                  onTap: () => _showPinDialog(context, ref, settings.isPinEnabled),
+                ),
+                _buildSettingTile(
+                  'BIOMETRICS',
+                  settings.isBiometricEnabled ? 'ENABLED' : 'DISABLED',
+                  Icons.fingerprint_rounded,
+                  NeoBrutalTheme.success,
+                  onTap: () => _showBiometricDialog(context, ref, settings.isBiometricEnabled),
+                ),
+              ]),
+              const SizedBox(height: 100),
+            ],
+          ),
         ),
-      ),
-      bottomNavigationBar: AnimatedBottomNav(
-        selectedIndex: 4,
-        onItemTapped: (index) {},
-      ),
-    );
+        bottomNavigationBar: AnimatedBottomNav(
+          selectedIndex: 4,
+          onItemTapped: (index) {},
+        ),
+      );
+    } catch (e, stack) {
+      debugPrint('Profile Screen Build Error: $e\n$stack');
+      return Scaffold(
+        backgroundColor: NeoBrutalTheme.background,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              'Oops! Something went wrong while loading your profile.\n\nError: $e',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white70),
+            ),
+          ),
+        ),
+      );
+    }
   }
+
+  // --- UI Widgets ---
 
   Widget _buildProfilePhotoSection(BuildContext context, WidgetRef ref, String name, ProfileService profileService) {
     return Column(
@@ -118,24 +124,31 @@ class NeoBrutalProfileScreen extends ConsumerWidget {
           name,
           style: NeoBrutalTheme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
         ),
-        const SizedBox(height: 4),
-        const Text(
-          'PREMIUM ACCOUNT',
-          style: TextStyle(color: NeoBrutalTheme.primary, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5),
-        ),
       ],
     );
   }
 
   String _getInitials(String name) {
-    final parts = name.split(' ');
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[1][0]).toUpperCase();
+    try {
+      final cleanName = name.trim();
+      if (cleanName.isEmpty) return 'U';
+      
+      final parts = cleanName.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+      if (parts.length >= 2) {
+        final f = parts[0];
+        final s = parts[1];
+        if (f.isNotEmpty && s.isNotEmpty) {
+          return (f.substring(0, 1) + s.substring(0, 1)).toUpperCase();
+        }
+      }
+      return cleanName.substring(0, 1).toUpperCase();
+    } catch (e) {
+      debugPrint('Error getting initials: $e');
+      return 'U';
     }
-    return name.isNotEmpty ? name[0].toUpperCase() : 'U';
   }
 
-  Widget _buildPersonalDetailsSection(BuildContext context, WidgetRef ref, ProfileService profileService) {
+  Widget _buildPersonalDetailsSection(BuildContext context, WidgetRef ref, ProfileService profileService, String currentName) {
     final fullName = profileService.getFullName();
     final phone = profileService.getPhone();
     final dob = profileService.getDateOfBirth();
@@ -144,15 +157,16 @@ class NeoBrutalProfileScreen extends ConsumerWidget {
     return _buildSection(context, 'PERSONAL DETAILS', [
       _buildDetailsTile(
         'FULL NAME',
-        fullName ?? 'Not set',
+        (fullName != null && fullName.isNotEmpty) ? fullName : (currentName.isNotEmpty ? currentName : 'Not set'),
         Icons.person_rounded,
         NeoBrutalTheme.primary,
         onTap: () => _showEditTextDialog(
           context,
           'Edit Full Name',
-          fullName ?? '',
+          fullName ?? currentName,
           (value) {
             profileService.setFullName(value);
+            ref.read(userProvider.notifier).setUserName(value);
             ref.invalidate(profileServiceProvider);
           },
         ),
@@ -409,11 +423,10 @@ class NeoBrutalProfileScreen extends ConsumerWidget {
   }
 
   Future<void> _showDatePickerDialog(BuildContext context, String? currentDate, Function(String) onSave) async {
-    // Use Flutter's native date picker — it has a proper Confirm button
-    // so it only saves when the user deliberately taps OK (not on every month nav tap).
+    final DateTime initialDate = _parseDate(currentDate);
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: _parseDate(currentDate),
+      initialDate: initialDate,
       firstDate: DateTime(1900),
       lastDate: DateTime.now(),
       helpText: 'SELECT DATE OF BIRTH',
@@ -507,7 +520,7 @@ class NeoBrutalProfileScreen extends ConsumerWidget {
   }
 
   DateTime _parseDate(String? dateString) {
-    if (dateString == null || dateString.isEmpty) return DateTime.now();
+    if (dateString == null || dateString.isEmpty || dateString == 'Not set') return DateTime.now();
     try {
       final parts = dateString.split('/');
       if (parts.length == 3) {
@@ -642,47 +655,58 @@ class NeoBrutalProfileScreen extends ConsumerWidget {
     );
   }
 
-  void _showCurrencyDialog(BuildContext context, WidgetRef ref, String currentCurrency) {
-    final currencies = ['\$', '€', '£', '₹', '¥', '₽', '฿'];
+  void _showCurrencyDialog(BuildContext context, WidgetRef ref, String currentCurrencyCode) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: NeoBrutalTheme.surface,
         title: const Text('SELECT CURRENCY', style: TextStyle(color: Colors.white, letterSpacing: 2)),
-        content: GridView.count(
-          crossAxisCount: 3,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          shrinkWrap: true,
-          children: currencies.map((curr) {
-            return GestureDetector(
-              onTap: () {
-                ref.read(settingsProvider.notifier).setCurrencySymbol(curr);
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Currency set to $curr')));
-              },
-              child: Container(
-                decoration: BoxDecoration(
-                  color: currentCurrency == curr ? NeoBrutalTheme.primary.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05),
-                  borderRadius: NeoBrutalTheme.radiusMedium,
-                  border: Border.all(
-                    color: currentCurrency == curr ? NeoBrutalTheme.primary : Colors.white10,
-                    width: currentCurrency == curr ? 2 : 1,
-                  ),
-                ),
-                child: Center(
-                  child: Text(
-                    curr,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView(
+            shrinkWrap: true,
+            children: currencyMap.entries.map((entry) {
+              final code = entry.key;
+              final name = entry.value;
+              final isSelected = currentCurrencyCode == code;
+              
+              return GestureDetector(
+                onTap: () {
+                  ref.read(currencyProvider.notifier).setCurrency(code);
+                  // Also update the legacy settings provider for broad compatibility
+                  ref.read(settingsProvider.notifier).setCurrencySymbol(getCurrencySymbol(code));
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Currency set to $code')));
+                },
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isSelected ? NeoBrutalTheme.primary.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05),
+                    borderRadius: NeoBrutalTheme.radiusMedium,
+                    border: Border.all(
+                      color: isSelected ? NeoBrutalTheme.primary : Colors.white10,
+                      width: isSelected ? 2 : 1,
                     ),
                   ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        name,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (isSelected)
+                        const Icon(Icons.check_circle, color: NeoBrutalTheme.primary, size: 20),
+                    ],
+                  ),
                 ),
-              ),
-            );
-          }).toList(),
+              );
+            }).toList(),
+          ),
         ),
         actions: [
           TextButton(
@@ -694,56 +718,8 @@ class NeoBrutalProfileScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _exportBackup(BuildContext context) async {
-    try {
-      final path = await BackupService.instance.exportBackup();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Backup exported to:\n$path')),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error exporting backup: $e')),
-        );
-      }
-    }
-  }
-
-  void _showClearDataDialog(BuildContext context, WidgetRef ref) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: NeoBrutalTheme.surface,
-        title: const Text('CLEAR ALL DATA?', style: TextStyle(color: NeoBrutalTheme.error, letterSpacing: 2)),
-        content: const Text(
-          'This action cannot be undone. All expenses, incomes, tasks, and settings will be deleted permanently.',
-          style: TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('CANCEL', style: TextStyle(color: Colors.white30)),
-          ),
-          TextButton(
-            onPressed: () {
-              ref.read(settingsProvider.notifier).clearAllData();
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('All data cleared')),
-              );
-            },
-            child: const Text('DELETE', style: TextStyle(color: NeoBrutalTheme.error, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _showPinDialog(BuildContext context, WidgetRef ref, bool isEnabled) {
     if (isEnabled) {
-      // Disable PIN - verify first
       _showVerifyPinDialog(context, ref, onVerified: () {
         ref.read(settingsProvider.notifier).disablePin();
         Navigator.pop(context);
@@ -752,7 +728,6 @@ class NeoBrutalProfileScreen extends ConsumerWidget {
         );
       });
     } else {
-      // Enable PIN - set new PIN
       _showSetNewPinDialog(context, ref);
     }
   }
@@ -895,7 +870,6 @@ class NeoBrutalProfileScreen extends ConsumerWidget {
 
   Future<void> _showBiometricDialog(BuildContext context, WidgetRef ref, bool isEnabled) async {
     if (isEnabled) {
-      // Disable biometric
       ref.read(settingsProvider.notifier).updateBiometrics(false);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -903,7 +877,6 @@ class NeoBrutalProfileScreen extends ConsumerWidget {
         );
       }
     } else {
-      // Check if device supports biometric
       try {
         final localAuth = LocalAuthentication();
         final canCheckBiometrics = await localAuth.canCheckBiometrics;
@@ -917,7 +890,6 @@ class NeoBrutalProfileScreen extends ConsumerWidget {
           return;
         }
 
-        // Try to authenticate with biometric (works on both Android and iOS)
         final isAuthenticated = await localAuth.authenticate(
           localizedReason: 'Authenticate to enable biometric lock',
         );
@@ -976,69 +948,65 @@ class _TimePickerState extends State<TimePicker> {
           children: [
             SizedBox(
               width: 80,
-              child: Scrollbar(
-                child: ListView.builder(
-                  itemCount: 24,
-                  itemBuilder: (context, index) {
-                    final isSelected = index == _hour;
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() => _hour = index);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: isSelected ? NeoBrutalTheme.primary.withValues(alpha: 0.3) : Colors.transparent,
-                          borderRadius: NeoBrutalTheme.radiusSmall,
-                        ),
-                        child: Center(
-                          child: Text(
-                            index.toString().padLeft(2, '0'),
-                            style: TextStyle(
-                              color: isSelected ? NeoBrutalTheme.primary : Colors.white60,
-                              fontSize: isSelected ? 16 : 14,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                            ),
+              height: 200, // Fixed height to avoid builder issues
+              child: ListView(
+                children: List.generate(24, (index) {
+                  final isSelected = index == _hour;
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() => _hour = index);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: isSelected ? NeoBrutalTheme.primary.withValues(alpha: 0.3) : Colors.transparent,
+                        borderRadius: NeoBrutalTheme.radiusSmall,
+                      ),
+                      child: Center(
+                        child: Text(
+                          index.toString().padLeft(2, '0'),
+                          style: TextStyle(
+                            color: isSelected ? NeoBrutalTheme.primary : Colors.white60,
+                            fontSize: isSelected ? 16 : 14,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                           ),
                         ),
                       ),
-                    );
-                  },
-                ),
+                    ),
+                  );
+                }),
               ),
             ),
             const Text(':', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
             SizedBox(
               width: 80,
-              child: Scrollbar(
-                child: ListView.builder(
-                  itemCount: 60,
-                  itemBuilder: (context, index) {
-                    final isSelected = index == _minute;
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() => _minute = index);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: isSelected ? NeoBrutalTheme.primary.withValues(alpha: 0.3) : Colors.transparent,
-                          borderRadius: NeoBrutalTheme.radiusSmall,
-                        ),
-                        child: Center(
-                          child: Text(
-                            index.toString().padLeft(2, '0'),
-                            style: TextStyle(
-                              color: isSelected ? NeoBrutalTheme.primary : Colors.white60,
-                              fontSize: isSelected ? 16 : 14,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                            ),
+              height: 200, // Fixed height to avoid builder issues
+              child: ListView(
+                children: List.generate(60, (index) {
+                  final isSelected = index == _minute;
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() => _minute = index);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: isSelected ? NeoBrutalTheme.primary.withValues(alpha: 0.3) : Colors.transparent,
+                        borderRadius: NeoBrutalTheme.radiusSmall,
+                      ),
+                      child: Center(
+                        child: Text(
+                          index.toString().padLeft(2, '0'),
+                          style: TextStyle(
+                            color: isSelected ? NeoBrutalTheme.primary : Colors.white60,
+                            fontSize: isSelected ? 16 : 14,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                           ),
                         ),
                       ),
-                    );
-                  },
-                ),
+                    ),
+                  );
+                }),
               ),
             ),
           ],

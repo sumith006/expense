@@ -1,9 +1,9 @@
 import 'dart:developer' as developer;
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+import 'package:permission_handler/permission_handler.dart';
 
 // Notification handler callback
 typedef NotificationActionCallback = void Function(String actionId, String? payload);
@@ -12,30 +12,28 @@ class NotificationService {
   static final NotificationService instance = NotificationService._init();
 
   // Channel IDs for different notification types
-  static const String taskChannelId = 'task_reminders_channel';
+  static const String taskChannelId = 'task_channel';
   static const String taskChannelName = 'Task Reminders';
-  static const String taskChannelDesc = 'Notifications for task due dates and reminders';
+  static const String taskChannelDesc = 'Task due reminders and overdue alerts';
 
-  static const String expenseChannelId = 'expense_alerts_channel';
-  static const String expenseChannelName = 'Expense Alerts';
-  static const String expenseChannelDesc = 'Budget alerts and spending notifications';
+  static const String budgetChannelId = 'budget_channel';
+  static const String budgetChannelName = 'Budget Alerts';
+  static const String budgetChannelDesc = 'Budget threshold alerts';
 
-  static const String budgetChannelId = 'budget_warnings_channel';
-  static const String budgetChannelName = 'Budget Warnings';
-  static const String budgetChannelDesc = 'Critical budget alerts';
-
-  static const String summaryChannelId = 'daily_summary_channel';
+  static const String summaryChannelId = 'summary_channel';
   static const String summaryChannelName = 'Daily Summary';
   static const String summaryChannelDesc = 'Daily and weekly summaries';
 
   // Action IDs for notification buttons (Google Tasks style)
-  static const String actionComplete = 'action_complete';
-  static const String actionReschedule = 'action_reschedule';
-  static const String actionSnooze = 'action_snooze';
-  static const String actionMarkPaid = 'action_mark_paid';
+  static const String actionComplete = 'COMPLETE_ACTION';
+  static const String actionReschedule = 'RESCHEDULE_ACTION';
+  static const String actionSnooze = 'SNOOZE_ACTION';
+  
+  // Reschedule options
   static const String actionRescheduleTomorrow = 'reschedule_tomorrow';
   static const String actionRescheduleWeekend = 'reschedule_weekend';
   static const String actionRescheduleNextWeek = 'reschedule_next_week';
+  static const String actionRescheduleCustom = 'reschedule_custom';
 
   final FlutterLocalNotificationsPlugin _notificationsPlugin =
       FlutterLocalNotificationsPlugin();
@@ -55,10 +53,13 @@ class NotificationService {
     _actionCallback = onActionReceived;
 
     tz.initializeTimeZones();
-    await _configureLocalTimezone();
+    try {
+      tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
+    } catch (e) {
+      _log('Could not set local timezone to Asia/Kolkata, falling back to UTC');
+    }
 
-    const androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -71,92 +72,83 @@ class NotificationService {
     );
 
     await _notificationsPlugin.initialize(
-      settings: initSettings,
+      initSettings,
       onDidReceiveNotificationResponse: _onNotificationTap,
-      onDidReceiveBackgroundNotificationResponse:
-          _onBackgroundNotificationTap,
+      onDidReceiveBackgroundNotificationResponse: _onBackgroundNotificationTap,
     );
 
     await _createNotificationChannels();
     await requestPermissions();
 
     _initialized = true;
-    _log('Notification service initialized with all channels');
-  }
-
-  Future<void> _configureLocalTimezone() async {
-    try {
-      tz.setLocalLocation(tz.local);
-    } catch (error, stackTrace) {
-      _log('Could not resolve local timezone; falling back to UTC.', error, stackTrace);
-    }
+    _log('Notification service initialized');
   }
 
   Future<void> _createNotificationChannels() async {
-    final channels = [
-      AndroidNotificationChannel(
-        taskChannelId,
-        taskChannelName,
-        description: taskChannelDesc,
-        importance: Importance.high,
-        playSound: true,
-        enableVibration: true,
-        showBadge: true,
-      ),
-      AndroidNotificationChannel(
-        expenseChannelId,
-        expenseChannelName,
-        description: expenseChannelDesc,
-        importance: Importance.high,
-        playSound: true,
-        enableVibration: true,
-      ),
-      AndroidNotificationChannel(
-        budgetChannelId,
-        budgetChannelName,
-        description: budgetChannelDesc,
-        importance: Importance.max,
-        playSound: true,
-        enableVibration: true,
-      ),
-      AndroidNotificationChannel(
-        summaryChannelId,
-        summaryChannelName,
-        description: summaryChannelDesc,
-        importance: Importance.low,
-        playSound: false,
-      ),
-    ];
+    final androidPlugin = _notificationsPlugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
 
-    for (var channel in channels) {
-      await _androidImplementation?.createNotificationChannel(channel);
-    }
+    const AndroidNotificationChannel taskChannel = AndroidNotificationChannel(
+      taskChannelId,
+      taskChannelName,
+      description: taskChannelDesc,
+      importance: Importance.high,
+      playSound: true,
+      enableVibration: true,
+    );
+    await androidPlugin?.createNotificationChannel(taskChannel);
+
+    const AndroidNotificationChannel budgetChannel = AndroidNotificationChannel(
+      budgetChannelId,
+      budgetChannelName,
+      description: budgetChannelDesc,
+      importance: Importance.high,
+    );
+    await androidPlugin?.createNotificationChannel(budgetChannel);
+
+    const AndroidNotificationChannel summaryChannel = AndroidNotificationChannel(
+      summaryChannelId,
+      summaryChannelName,
+      description: summaryChannelDesc,
+      importance: Importance.low,
+    );
+    await androidPlugin?.createNotificationChannel(summaryChannel);
   }
 
   Future<void> requestPermissions() async {
-    final android = _androidImplementation;
-    if (android != null) {
-      await android.requestNotificationsPermission();
-      try {
-        await android.requestExactAlarmsPermission();
-      } catch (error, stackTrace) {
-        _log('Exact alarm permission request unavailable.', error, stackTrace);
-      }
+    if (kIsWeb) return;
+
+    if (await Permission.notification.isDenied) {
+      await Permission.notification.request();
     }
 
-    final ios = _notificationsPlugin.resolvePlatformSpecificImplementation<
-        IOSFlutterLocalNotificationsPlugin>();
-    await ios?.requestPermissions(alert: true, badge: true, sound: true);
+    final android = _notificationsPlugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    if (android != null) {
+      try {
+        await android.requestExactAlarmsPermission();
+      } catch (e) {
+        _log('Exact alarm permission request failed or unavailable');
+      }
+    }
   }
 
   Future<bool> areNotificationsEnabled() async {
-    return await _androidImplementation?.areNotificationsEnabled() ?? true;
+    final android = _notificationsPlugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    return await android?.areNotificationsEnabled() ?? true;
   }
 
-  // ==================== TASK NOTIFICATIONS (Google Tasks Style) ====================
+  Future<List<PendingNotificationRequest>> getPendingNotifications() {
+    return _notificationsPlugin.pendingNotificationRequests();
+  }
 
-  /// Task due soon notification (30 minutes before)
   Future<void> showTaskDueNotification({
+    required int taskId,
+    required String taskTitle,
+    required DateTime dueDateTime,
+  }) async {
+    await showTaskDueReminder(taskId: taskId, taskTitle: taskTitle, dueDateTime: dueDateTime);
+  }
+
+  Future<void> showTaskDueReminder({
     required int taskId,
     required String taskTitle,
     required DateTime dueDateTime,
@@ -170,7 +162,7 @@ class NotificationService {
     const androidDetails = AndroidNotificationDetails(
       taskChannelId,
       taskChannelName,
-      channelDescription: taskChannelDesc,
+      channelDescription: 'Task due soon',
       importance: Importance.high,
       priority: Priority.high,
       actions: [
@@ -180,22 +172,20 @@ class NotificationService {
       ],
     );
 
-    const iosDetails = DarwinNotificationDetails(presentAlert: true, presentBadge: true, presentSound: true);
+    const iosDetails = DarwinNotificationDetails(categoryIdentifier: 'task_category');
 
     await _notificationsPlugin.zonedSchedule(
-      id: taskId,
-      title: '⏰ Task Due Soon',
-      body: '"$taskTitle" is due at ${_formatTime(dueDateTime)}',
-      scheduledDate: tz.TZDateTime.from(scheduledDate, tz.local),
-      notificationDetails: const NotificationDetails(android: androidDetails, iOS: iosDetails),
+      taskId,
+      '⏰ Task Due Soon',
+      '"$taskTitle" is due at ${_formatTime(dueDateTime)}',
+      tz.TZDateTime.from(scheduledDate, tz.local),
+      const NotificationDetails(android: androidDetails, iOS: iosDetails),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
       payload: 'task_$taskId',
     );
-
-    _log('Scheduled task due notification for task $taskId');
   }
 
-  /// Overdue task notification (with Reschedule button like Google Tasks)
   Future<void> showOverdueTaskNotification({
     required int taskId,
     required String taskTitle,
@@ -207,31 +197,28 @@ class NotificationService {
     const androidDetails = AndroidNotificationDetails(
       taskChannelId,
       taskChannelName,
-      channelDescription: taskChannelDesc,
+      channelDescription: 'Task is overdue',
       importance: Importance.high,
       priority: Priority.high,
       actions: [
         AndroidNotificationAction(actionComplete, '✓ Mark Complete', showsUserInterface: true),
-        AndroidNotificationAction(actionReschedule, '📅 Reschedule', showsUserInterface: true),
+        AndroidNotificationAction(actionReschedule, '📅 Reschedule →', showsUserInterface: true),
       ],
     );
 
-    final body = daysOverdue == 1
+    final String body = daysOverdue == 1
         ? '"$taskTitle" is overdue by 1 day'
         : '"$taskTitle" is overdue by $daysOverdue days';
 
     await _notificationsPlugin.show(
-      id: taskId,
-      title: '⚠️ Task Overdue',
-      body: body,
-      notificationDetails: const NotificationDetails(android: androidDetails),
+      taskId + 10000,
+      '⚠️ Task Overdue',
+      body,
+      const NotificationDetails(android: androidDetails),
       payload: 'task_$taskId',
     );
-
-    _log('Showed overdue task notification for task $taskId ($daysOverdue days)');
   }
 
-  /// Quick Reschedule options (like Google Calendar/Tasks)
   Future<void> showRescheduleOptions({
     required int taskId,
     required String taskTitle,
@@ -242,29 +229,26 @@ class NotificationService {
     const androidDetails = AndroidNotificationDetails(
       taskChannelId,
       taskChannelName,
+      channelDescription: 'Reschedule options',
       importance: Importance.high,
       priority: Priority.high,
       actions: [
         AndroidNotificationAction(actionRescheduleTomorrow, 'Tomorrow', showsUserInterface: true),
         AndroidNotificationAction(actionRescheduleWeekend, 'This Weekend', showsUserInterface: true),
         AndroidNotificationAction(actionRescheduleNextWeek, 'Next Week', showsUserInterface: true),
+        AndroidNotificationAction(actionRescheduleCustom, 'Custom...', showsUserInterface: true),
       ],
     );
 
     await _notificationsPlugin.show(
-      id: taskId + 1000, // Unique ID for reschedule notification
-      title: 'Reschedule Task',
-      body: 'When would you like to reschedule "$taskTitle"?',
-      notificationDetails: const NotificationDetails(android: androidDetails),
+      taskId + 20000,
+      'Reschedule Task',
+      'When would you like to reschedule "$taskTitle"?',
+      const NotificationDetails(android: androidDetails),
       payload: 'reschedule_$taskId',
     );
-
-    _log('Showed reschedule options for task $taskId');
   }
 
-  // ==================== EXPENSE & BUDGET NOTIFICATIONS ====================
-
-  /// Budget threshold alert (50%, 80%, 100%, 120%)
   Future<void> showBudgetAlert({
     required String categoryName,
     required double spent,
@@ -276,228 +260,66 @@ class NotificationService {
 
     String title;
     String body;
-    String channelId;
-    Importance importance;
 
     if (percentage >= 120) {
-      title = '🚨 Budget Exceeded!';
-      body = '$categoryName: ${percentage.toInt()}% used (₹${spent.toStringAsFixed(0)}/₹${budget.toStringAsFixed(0)})';
-      channelId = budgetChannelId;
-      importance = Importance.max;
+      title = '🚨 Budget Severely Exceeded!';
+      body = '$categoryName: ${percentage.toInt()}% used (\$${spent.toStringAsFixed(0)}/\$${budget.toStringAsFixed(0)})';
     } else if (percentage >= 100) {
       title = '🚨 Budget Exceeded!';
-      body = '$categoryName: ${percentage.toInt()}% used (₹${spent.toStringAsFixed(0)}/₹${budget.toStringAsFixed(0)})';
-      channelId = budgetChannelId;
-      importance = Importance.max;
+      body = '$categoryName: ${percentage.toInt()}% used (\$${spent.toStringAsFixed(0)}/\$${budget.toStringAsFixed(0)})';
     } else if (percentage >= 80) {
       title = '⚠️ Budget Warning';
-      body = '$categoryName: ${percentage.toInt()}% used. Only ₹${(budget - spent).toStringAsFixed(0)} left';
-      channelId = budgetChannelId;
-      importance = Importance.high;
+      body = '$categoryName: ${percentage.toInt()}% used. Only \$${(budget - spent).toStringAsFixed(0)} left';
     } else {
       title = '📊 Budget Update';
-      body = '$categoryName: ${percentage.toInt()}% of budget used (₹${spent.toStringAsFixed(0)}/₹${budget.toStringAsFixed(0)})';
-      channelId = expenseChannelId;
-      importance = Importance.low;
+      body = '$categoryName: ${percentage.toInt()}% of budget used';
     }
-
-    final androidDetails = AndroidNotificationDetails(
-      channelId,
-      channelId == budgetChannelId ? budgetChannelName : expenseChannelName,
-      importance: importance,
-      priority: importance == Importance.max ? Priority.max : Priority.high,
-    );
-
-    await _notificationsPlugin.show(
-      id: DateTime.now().millisecondsSinceEpoch % 100000,
-      title: title,
-      body: body,
-      notificationDetails: NotificationDetails(android: androidDetails),
-      payload: 'budget_$categoryName',
-    );
-
-    _log('Showed budget alert for $categoryName: ${percentage.toInt()}%');
-  }
-
-  /// Unusual spending detection
-  Future<void> showUnusualSpendingAlert({
-    required String categoryName,
-    required double amount,
-    required double averageAmount,
-  }) async {
-    if (kIsWeb) return;
-    await _ensureInitialized();
-
-    final difference = ((amount - averageAmount) / averageAmount * 100).toInt();
-    final isHigher = amount > averageAmount;
 
     const androidDetails = AndroidNotificationDetails(
-      expenseChannelId,
-      expenseChannelName,
-      importance: Importance.high,
-    );
-
-    final title = isHigher ? '📈 Unusual Spending Detected' : '📉 Lower Spending This Week';
-    final body = isHigher
-        ? '$categoryName: ₹${amount.toStringAsFixed(0)} is ${difference}% higher than usual'
-        : '$categoryName: ₹${amount.toStringAsFixed(0)} is ${difference.abs()}% lower than usual. Great job!';
-
-    await _notificationsPlugin.show(
-      id: DateTime.now().millisecondsSinceEpoch % 100000,
-      title: title,
-      body: body,
-      notificationDetails: const NotificationDetails(android: androidDetails),
-      payload: 'unusual_spending',
-    );
-
-    _log('Showed unusual spending alert for $categoryName');
-  }
-
-  /// Bill due reminder
-  Future<void> showBillReminder({
-    required int billId,
-    required String billName,
-    required double amount,
-    required DateTime dueDate,
-    required int daysBefore,
-  }) async {
-    if (kIsWeb) return;
-    await _ensureInitialized();
-
-    String title;
-    String body;
-    String actionLabel;
-
-    if (daysBefore == 0) {
-      title = '💰 Bill Due Today';
-      body = '$billName of ₹${amount.toStringAsFixed(0)} is due today';
-      actionLabel = 'Mark Paid';
-    } else if (daysBefore == 1) {
-      title = '⏰ Bill Due Tomorrow';
-      body = '$billName of ₹${amount.toStringAsFixed(0)} is due tomorrow';
-      actionLabel = 'Remind Me Later';
-    } else {
-      title = '📅 Upcoming Bill';
-      body = '$billName of ₹${amount.toStringAsFixed(0)} is due in $daysBefore days';
-      actionLabel = 'View Details';
-    }
-
-    final androidDetails = AndroidNotificationDetails(
-      expenseChannelId,
-      expenseChannelName,
+      budgetChannelId,
+      budgetChannelName,
       importance: Importance.high,
       priority: Priority.high,
-      actions: [
-        AndroidNotificationAction(actionMarkPaid, actionLabel, showsUserInterface: true),
-        AndroidNotificationAction(actionSnooze, 'Remind later', showsUserInterface: true),
-      ],
     );
-
-    final scheduledDate = dueDate.subtract(Duration(days: daysBefore));
-    if (scheduledDate.isBefore(DateTime.now())) return;
-
-    await _notificationsPlugin.zonedSchedule(
-      id: billId + daysBefore,
-      title: title,
-      body: body,
-      scheduledDate: tz.TZDateTime.from(scheduledDate, tz.local),
-      notificationDetails: NotificationDetails(android: androidDetails),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      payload: 'bill_$billId',
-    );
-
-    _log('Scheduled bill reminder for $billName ($daysBefore days before)');
-  }
-
-  // ==================== DAILY/WEEKLY SUMMARIES ====================
-
-  /// Daily task summary (morning - 9:00 AM)
-  Future<void> scheduleDailyTaskSummary({
-    int hour = 9,
-    int minute = 0,
-  }) async {
-    if (kIsWeb) return;
-    await _ensureInitialized();
-
-    const androidDetails = AndroidNotificationDetails(
-      summaryChannelId,
-      summaryChannelName,
-      importance: Importance.low,
-    );
-
-    await _notificationsPlugin.zonedSchedule(
-      id: 1000,
-      title: '📋 Your Tasks Today',
-      body: 'Tap to see tasks due today',
-      scheduledDate: _nextInstanceOfTime(hour, minute),
-      notificationDetails: const NotificationDetails(android: androidDetails),
-      androidScheduleMode: AndroidScheduleMode.inexact,
-      matchDateTimeComponents: DateTimeComponents.time,
-      payload: 'daily_task_summary',
-    );
-
-    _log('Scheduled daily task summary at $hour:${minute.toString().padLeft(2, '0')}');
-  }
-
-  /// Daily spending summary (evening - 9:00 PM)
-  Future<void> scheduleDailySpendingSummary({
-    int hour = 21,
-    int minute = 0,
-  }) async {
-    if (kIsWeb) return;
-    await _ensureInitialized();
-
-    const androidDetails = AndroidNotificationDetails(
-      summaryChannelId,
-      summaryChannelName,
-      importance: Importance.low,
-    );
-
-    await _notificationsPlugin.zonedSchedule(
-      id: 1001,
-      title: '💰 Daily Spending',
-      body: 'Tap to see spending breakdown',
-      scheduledDate: _nextInstanceOfTime(hour, minute),
-      notificationDetails: const NotificationDetails(android: androidDetails),
-      androidScheduleMode: AndroidScheduleMode.inexact,
-      matchDateTimeComponents: DateTimeComponents.time,
-      payload: 'daily_spending_summary',
-    );
-
-    _log('Scheduled daily spending summary at $hour:${minute.toString().padLeft(2, '0')}');
-  }
-
-  /// Productivity insight notification
-  Future<void> showProductivityInsight({
-    required int tasksCompleted,
-    required int totalTasks,
-  }) async {
-    if (kIsWeb) return;
-    await _ensureInitialized();
-
-    const androidDetails = AndroidNotificationDetails(
-      summaryChannelId,
-      summaryChannelName,
-      importance: Importance.low,
-    );
-
-    final completionRate = (tasksCompleted / totalTasks * 100).toInt();
-    final body = tasksCompleted > 0
-        ? 'You completed $tasksCompleted task${tasksCompleted > 1 ? 's' : ''} today ($completionRate%)! 🎉'
-        : 'Start completing tasks to track your productivity!';
 
     await _notificationsPlugin.show(
-      id: 1002,
-      title: '✨ Great Productivity',
-      body: body,
-      notificationDetails: const NotificationDetails(android: androidDetails),
-      payload: 'productivity_insight',
+      DateTime.now().millisecondsSinceEpoch % 100000,
+      title,
+      body,
+      const NotificationDetails(android: androidDetails),
+      payload: 'budget_$categoryName',
     );
-
-    _log('Showed productivity insight: $tasksCompleted/$totalTasks completed');
   }
 
-  // ==================== NOTIFICATION HANDLERS ====================
+  Future<void> scheduleDailyTaskSummary({int hour = 21, int minute = 0}) async {
+    if (kIsWeb) return;
+    await _ensureInitialized();
+
+    final now = DateTime.now();
+    var scheduledTime = DateTime(now.year, now.month, now.day, hour, minute);
+    if (scheduledTime.isBefore(now)) {
+      scheduledTime = scheduledTime.add(const Duration(days: 1));
+    }
+
+    const androidDetails = AndroidNotificationDetails(
+      summaryChannelId,
+      summaryChannelName,
+      importance: Importance.low,
+      priority: Priority.low,
+    );
+
+    await _notificationsPlugin.zonedSchedule(
+      3000,
+      '📋 Your Tasks Today',
+      'Open the app to view your remaining tasks and financial summary.',
+      tz.TZDateTime.from(scheduledTime, tz.local),
+      const NotificationDetails(android: androidDetails),
+      androidScheduleMode: AndroidScheduleMode.inexact,
+      matchDateTimeComponents: DateTimeComponents.time,
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      payload: 'daily_summary',
+    );
+  }
 
   void _onNotificationTap(NotificationResponse response) {
     final payload = response.payload;
@@ -507,25 +329,24 @@ class NotificationService {
 
     if (payload == null) return;
 
-    // Route to appropriate handler
     if (payload.startsWith('task_')) {
-      _handleTaskAction(actionId, payload);
+      final taskIdStr = payload.split('_')[1];
+      _handleTaskAction(actionId, taskIdStr, payload);
     } else if (payload.startsWith('reschedule_')) {
-      _handleRescheduleAction(actionId, payload);
-    } else if (payload.startsWith('bill_')) {
-      _handleBillAction(actionId, payload);
+      final taskIdStr = payload.split('_')[1];
+      _handleRescheduleAction(actionId, taskIdStr, payload);
     } else {
       _actionCallback?.call(actionId ?? 'open', payload);
     }
   }
 
-  void _handleTaskAction(String? actionId, String payload) {
+  void _handleTaskAction(String? actionId, String taskId, String payload) {
     switch (actionId) {
       case actionComplete:
         _actionCallback?.call('task_complete', payload);
         break;
       case actionReschedule:
-        _actionCallback?.call('task_reschedule', payload);
+        showRescheduleOptions(taskId: int.parse(taskId), taskTitle: 'Task');
         break;
       case actionSnooze:
         _actionCallback?.call('task_snooze', payload);
@@ -535,59 +356,27 @@ class NotificationService {
     }
   }
 
-  void _handleRescheduleAction(String? actionId, String payload) {
-    switch (actionId) {
-      case actionRescheduleTomorrow:
-        _actionCallback?.call('reschedule_tomorrow', payload);
-        break;
-      case actionRescheduleWeekend:
-        _actionCallback?.call('reschedule_weekend', payload);
-        break;
-      case actionRescheduleNextWeek:
-        _actionCallback?.call('reschedule_next_week', payload);
-        break;
-      default:
-        _actionCallback?.call('reschedule_custom', payload);
+  void _handleRescheduleAction(String? actionId, String taskId, String payload) {
+    if (actionId != null) {
+      _actionCallback?.call(actionId, payload);
+    } else {
+      _actionCallback?.call('reschedule_custom', payload);
     }
   }
-
-  void _handleBillAction(String? actionId, String payload) {
-    switch (actionId) {
-      case actionMarkPaid:
-        _actionCallback?.call('bill_mark_paid', payload);
-        break;
-      case actionSnooze:
-        _actionCallback?.call('bill_snooze', payload);
-        break;
-      default:
-        _actionCallback?.call('bill_open', payload);
-    }
-  }
-
-  // ==================== UTILITY METHODS ====================
 
   String _formatTime(DateTime date) {
     return '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
   }
 
-  tz.TZDateTime _nextInstanceOfTime(int hour, int minute) {
-    final tz.TZDateTime now = tz.TZDateTime.now(tz.local);
-    tz.TZDateTime scheduledDate = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
-    if (scheduledDate.isBefore(now)) {
-      scheduledDate = scheduledDate.add(const Duration(days: 1));
-    }
-    return scheduledDate;
-  }
-
-  Future<List<PendingNotificationRequest>> getPendingNotifications() {
-    return _notificationsPlugin.pendingNotificationRequests();
-  }
-
   Future<void> cancelNotification(int id) async {
-    await _notificationsPlugin.cancel(id: id);
+    await _notificationsPlugin.cancel(id);
   }
 
   Future<void> cancelAllNotifications() async {
+    await _notificationsPlugin.cancelAll();
+  }
+
+  Future<void> cancelAll() async {
     await _notificationsPlugin.cancelAll();
   }
 
@@ -595,11 +384,6 @@ class NotificationService {
     if (!_initialized) {
       await init();
     }
-  }
-
-  AndroidFlutterLocalNotificationsPlugin? get _androidImplementation {
-    return _notificationsPlugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
   }
 
   void _log(String message, [Object? error, StackTrace? stackTrace]) {
@@ -617,8 +401,5 @@ class NotificationService {
 
 @pragma('vm:entry-point')
 void _onBackgroundNotificationTap(NotificationResponse response) {
-  developer.log(
-    'Background notification tapped: ${response.payload ?? 'no payload'}',
-    name: 'NotificationService',
-  );
+  developer.log('Background notification tapped: ${response.payload}', name: 'NotificationService');
 }

@@ -8,6 +8,10 @@ class TransactionTile extends StatelessWidget {
   final IconData icon;
   final bool isExpense;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+  final String currencySymbol;
+  final String? receiptImagePath;
+  final VoidCallback? onReceiptTap;
   
   const TransactionTile({
     super.key,
@@ -17,12 +21,17 @@ class TransactionTile extends StatelessWidget {
     required this.icon,
     required this.isExpense,
     this.onTap,
+    this.onLongPress,
+    this.currencySymbol = r'$',
+    this.receiptImagePath,
+    this.onReceiptTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
+      onLongPress: onLongPress,
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
@@ -59,9 +68,35 @@ class TransactionTile extends StatelessWidget {
                     style: NeoBrutalTheme.textTheme.titleMedium,
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(color: Colors.grey, fontSize: 12),
+                  Row(
+                    children: [
+                      Text(
+                        subtitle,
+                        style: const TextStyle(color: Colors.grey, fontSize: 12),
+                      ),
+                      if (receiptImagePath != null) ...[
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: onReceiptTap,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: NeoBrutalTheme.primary.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: NeoBrutalTheme.primary.withOpacity(0.2)),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.attachment_rounded, size: 10, color: NeoBrutalTheme.primary),
+                                SizedBox(width: 2),
+                                Text('RECEIPT', style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: NeoBrutalTheme.primary)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),
@@ -71,7 +106,7 @@ class TransactionTile extends StatelessWidget {
               duration: const Duration(milliseconds: 500),
               builder: (context, value, child) {
                 return Text(
-                  '${isExpense ? '-' : '+'}\$${value.toStringAsFixed(2)}',
+                  '${isExpense ? '-' : '+'}$currencySymbol${value.toStringAsFixed(2)}',
                   style: TextStyle(
                     color: isExpense ? NeoBrutalTheme.error : NeoBrutalTheme.success,
                     fontSize: 18,

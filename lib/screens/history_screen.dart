@@ -10,6 +10,8 @@ import '../../utils/currency_formatter.dart';
 import 'expense_screen/add_expense_screen.dart';
 import 'income_screen/add_income_screen.dart';
 
+import '../../services/image_service.dart';
+
 class HistoryScreen extends ConsumerStatefulWidget {
   const HistoryScreen({super.key});
 
@@ -377,12 +379,13 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen>
                               item: item,
                               settings: settings,
                               isDark: isDark,
+                              context: context,
                               onTap: () {
                                 if (item is Expense) {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (_) => const AddExpenseScreen(),
+                                      builder: (_) => AddExpenseScreen(existingExpense: item as Expense),
                                     ),
                                   );
                                 } else {
@@ -449,6 +452,7 @@ class _TransactionTile extends StatelessWidget {
   final bool isDark;
   final VoidCallback onTap;
   final VoidCallback onDismissed;
+  final BuildContext context;
 
   const _TransactionTile({
     required this.item,
@@ -456,6 +460,7 @@ class _TransactionTile extends StatelessWidget {
     required this.isDark,
     required this.onTap,
     required this.onDismissed,
+    required this.context,
   });
 
   @override
@@ -474,6 +479,7 @@ class _TransactionTile extends StatelessWidget {
     final color = isExpense
         ? AppConstants.expenseColor
         : AppConstants.secondaryColor;
+    final receiptPath = isExpense ? (item as Expense).receiptImagePath : null;
 
     return Dismissible(
       key: Key(isExpense ? (item as Expense).id : (item as Income).id),
@@ -554,12 +560,40 @@ class _TransactionTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 2),
-                      Text(
-                        '$category • ${DateFormat('h:mm a').format(date)}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey,
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '$category • ${DateFormat('h:mm a').format(date)}',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (receiptPath != null) ...[
+                            const SizedBox(width: 8),
+                            GestureDetector(
+                              onTap: () => ImageService.showReceiptPreview(context, receiptPath),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppConstants.primaryColor.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.attachment_rounded, size: 10, color: AppConstants.primaryColor),
+                                    SizedBox(width: 2),
+                                    Text('RECEIPT', style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: AppConstants.primaryColor)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ],
                   ),

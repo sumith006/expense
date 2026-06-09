@@ -14,6 +14,8 @@ import '../../widgets/custom_dropdown_field.dart';
 import '../../widgets/date_picker_trigger.dart';
 import '../../widgets/primary_button.dart';
 
+import '../../providers/currency_provider.dart';
+
 class AddIncomeScreen extends ConsumerStatefulWidget {
   final Income? existingIncome;
   const AddIncomeScreen({super.key, this.existingIncome});
@@ -126,7 +128,8 @@ class _AddIncomeScreenState extends ConsumerState<AddIncomeScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final expenseState = ref.watch(expenseProvider);
-    final settings = ref.watch(settingsProvider);
+    final currencyCode = ref.watch(currencyProvider);
+    final currencySymbol = getCurrencySymbol(currencyCode);
 
     final incomeCategories = expenseState.categories
         .where((c) => c.type == CategoryType.income)
@@ -220,7 +223,7 @@ class _AddIncomeScreenState extends ConsumerState<AddIncomeScreen> {
                           hintStyle: theme.textTheme.displayMedium?.copyWith(
                             color: AppConstants.secondaryColor.withValues(alpha: 0.5),
                           ),
-                          prefixText: '${settings.currencySymbol} ',
+                          prefixText: '$currencySymbol ',
                           prefixStyle: theme.textTheme.displayMedium?.copyWith(
                             color: AppConstants.secondaryColor,
                             fontWeight: FontWeight.bold,

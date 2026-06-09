@@ -1,4 +1,4 @@
-import 'package:flutter_riverpod/legacy.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // Currency state provider
@@ -54,7 +54,13 @@ String getCurrencySymbol(String code) {
   }
 }
 
-// Helper function to format amount
-String formatAmount(double amount, String currencyCode) {
-  return '${getCurrencySymbol(currencyCode)}${amount.toStringAsFixed(2)}';
-}
+// Map of currency codes to names
+final Map<String, String> currencyMap = {
+  'USD': 'US Dollar (\$)',
+  'EUR': 'Euro (€)',
+  'GBP': 'British Pound (£)',
+  'INR': 'Indian Rupee (₹)',
+  'JPY': 'Japanese Yen (¥)',
+  'CAD': 'Canadian Dollar (C\$)',
+  'AUD': 'Australian Dollar (A\$)',
+};

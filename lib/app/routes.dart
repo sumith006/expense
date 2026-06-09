@@ -2,20 +2,16 @@ import 'package:flutter/material.dart';
 import '../screens/splash_screen.dart';
 import '../auth/pin_setup_screen.dart';
 import '../auth/pin_lock_screen.dart';
-import '../screens/dashboard_screen.dart';
 import '../screens/expense_screen/add_expense_screen.dart';
 import '../screens/income_screen/add_income_screen.dart';
 import '../screens/task_screen/add_task_screen.dart';
 import '../screens/settings_screen.dart';
 import '../screens/backup_screen.dart';
 import '../screens/notification_test_screen.dart';
-import '../screens/modern_dashboard_screen.dart';
-import '../screens/banking_dashboard_screen.dart';
 import '../screens/neobrutal_dashboard_screen.dart';
 import '../screens/neobrutal_expense_screen.dart';
 import '../screens/neobrutal_task_screen.dart';
 import '../screens/neobrutal_profile_screen.dart';
-import '../screens/profile_screen.dart';
 import '../screens/onboarding_screen.dart';
 import '../screens/reports_screen.dart';
 
@@ -46,14 +42,15 @@ class AppRoutes {
       onboarding: (context) => const OnboardingScreen(),
       pinSetup: (context) => const PinSetupScreen(),
       pinLock: (context) => const PinLockScreen(),
-      dashboard: (context) => const DashboardScreen(),
-      modernDashboard: (context) => const ModernDashboardScreen(),
-      bankingDashboard: (context) => const BankingDashboardScreen(),
+      // Use NeoBrutalDashboardScreen as the default for all dashboard routes
+      dashboard: (context) => const NeoBrutalDashboardScreen(),
+      modernDashboard: (context) => const NeoBrutalDashboardScreen(),
+      bankingDashboard: (context) => const NeoBrutalDashboardScreen(),
       neobrutalDashboard: (context) => const NeoBrutalDashboardScreen(),
-      '/neobrutal_expense': (context) => const NeoBrutalExpenseScreen(),
-      '/neobrutal_task': (context) => const NeoBrutalTaskScreen(),
-      '/neobrutal_profile': (context) => const NeoBrutalProfileScreen(),
-      profile: (context) => const ProfileScreen(),
+      neobrutalExpense: (context) => const NeoBrutalExpenseScreen(),
+      neobrutalTask: (context) => const NeoBrutalTaskScreen(),
+      neobrutalProfile: (context) => const NeoBrutalProfileScreen(),
+      profile: (context) => const NeoBrutalProfileScreen(),
       addExpense: (context) => const AddExpenseScreen(),
       addIncome: (context) => const AddIncomeScreen(),
       addTask: (context) => const AddTaskScreen(),
