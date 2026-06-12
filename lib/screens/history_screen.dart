@@ -385,7 +385,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen>
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (_) => AddExpenseScreen(existingExpense: item as Expense),
+                                      builder: (_) => AddExpenseScreen(existingExpense: item),
                                     ),
                                   );
                                 } else {
@@ -579,7 +579,7 @@ class _TransactionTile extends StatelessWidget {
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: AppConstants.primaryColor.withOpacity(0.1),
+                                  color: AppConstants.primaryColor.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: const Row(

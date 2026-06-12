@@ -6,7 +6,6 @@ import 'package:intl/intl.dart';
 import '../../models/income.dart';
 import '../../models/category.dart';
 import '../../providers/expense_provider.dart';
-import '../../providers/settings_provider.dart';
 import '../../utils/constants_shared.dart';
 import '../../utils/helpers.dart';
 import '../../widgets/custom_text_field.dart';

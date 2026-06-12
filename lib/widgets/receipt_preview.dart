@@ -60,7 +60,7 @@ class ReceiptPreviewDialog extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.bottomCenter,
                 end: Alignment.topCenter,
-                colors: [Colors.black.withOpacity(0.8), Colors.transparent],
+                colors: [Colors.black.withValues(alpha: 0.8), Colors.transparent],
               ),
             ),
             child: Row(
@@ -110,9 +110,9 @@ class ReceiptPreviewDialog extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.2),
+              color: color.withValues(alpha: 0.2),
               shape: BoxShape.circle,
-              border: Border.all(color: color.withOpacity(0.4), width: 1),
+              border: Border.all(color: color.withValues(alpha: 0.4), width: 1),
             ),
             child: Icon(icon, color: color, size: 24),
           ),
@@ -120,7 +120,7 @@ class ReceiptPreviewDialog extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              color: color.withOpacity(0.8),
+              color: color.withValues(alpha: 0.8),
               fontSize: 10,
               fontWeight: FontWeight.w900,
               letterSpacing: 1,

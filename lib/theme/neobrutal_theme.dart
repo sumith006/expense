@@ -282,7 +282,7 @@ class NeoBrutalTheme {
       cardTheme: CardThemeData(
         color: const Color(0xFFFFFFFF),
         elevation: 2,
-        shadowColor: Colors.black.withOpacity(0.05),
+        shadowColor: Colors.black.withValues(alpha: 0.05),
         shape: const RoundedRectangleBorder(borderRadius: radiusLarge),
         clipBehavior: Clip.antiAlias,
       ),

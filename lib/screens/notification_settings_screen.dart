@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/notification_service.dart';
 
 class NotificationSettingsScreen extends ConsumerStatefulWidget {
-  const NotificationSettingsScreen({Key? key}) : super(key: key);
+  const NotificationSettingsScreen({super.key});
 
   @override
   ConsumerState<NotificationSettingsScreen> createState() =>

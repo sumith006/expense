@@ -185,7 +185,7 @@ class _NeoBrutalExpenseScreenState extends ConsumerState<NeoBrutalExpenseScreen>
                   key: Key(id),
                   direction: DismissDirection.endToStart,
                   confirmDismiss: (direction) async {
-                    return await _confirmDeletion(context, isExpense ? (tx as Expense).description : (tx as Income).source);
+                    return await _confirmDeletion(context, isExpense ? (tx).description : (tx as Income).source);
                   },
                   onDismissed: (direction) {
                     _deleteTransactionWithUndo(tx, isExpense);
@@ -201,17 +201,17 @@ class _NeoBrutalExpenseScreenState extends ConsumerState<NeoBrutalExpenseScreen>
                     child: const Icon(Icons.delete_forever_rounded, color: Colors.white, size: 28),
                   ),
                   child: TransactionTile(
-                    title: isExpense ? (tx as Expense).description : (tx as Income).source,
-                    subtitle: isExpense ? (tx as Expense).categoryName : (tx as Income).categoryName,
-                    amount: isExpense ? (tx as Expense).amount : (tx as Income).amount,
+                    title: isExpense ? (tx).description : (tx as Income).source,
+                    subtitle: isExpense ? (tx).categoryName : (tx as Income).categoryName,
+                    amount: isExpense ? (tx).amount : (tx as Income).amount,
                     icon: isExpense ? Icons.shopping_bag_rounded : Icons.payments_rounded,
                     isExpense: isExpense,
                     onTap: () => _editTransaction(tx, isExpense),
                     onLongPress: () => _editTransaction(tx, isExpense),
                     currencySymbol: currencySymbol,
-                    receiptImagePath: isExpense ? (tx as Expense).receiptImagePath : null,
-                    onReceiptTap: isExpense && (tx as Expense).receiptImagePath != null 
-                        ? () => ImageService.showReceiptPreview(context, (tx as Expense).receiptImagePath!) 
+                    receiptImagePath: isExpense ? (tx).receiptImagePath : null,
+                    onReceiptTap: isExpense && (tx).receiptImagePath != null 
+                        ? () => ImageService.showReceiptPreview(context, (tx).receiptImagePath!) 
                         : null,
                   ),
                 ),

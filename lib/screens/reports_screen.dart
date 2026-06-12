@@ -776,7 +776,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
           child: LinearProgressIndicator(
             value: pct,
             minHeight: 6,
-            backgroundColor: Colors.white.withOpacity(0.05),
+            backgroundColor: Colors.white.withValues(alpha: 0.05),
             valueColor: AlwaysStoppedAnimation<Color>(color),
           ),
         ),

@@ -81,9 +81,9 @@ class TransactionTile extends StatelessWidget {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: NeoBrutalTheme.primary.withOpacity(0.1),
+                              color: NeoBrutalTheme.primary.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: NeoBrutalTheme.primary.withOpacity(0.2)),
+                              border: Border.all(color: NeoBrutalTheme.primary.withValues(alpha: 0.2)),
                             ),
                             child: const Row(
                               mainAxisSize: MainAxisSize.min,
